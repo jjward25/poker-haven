@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Users, DollarSign, Clock, Pause, Play } from "lucide-react"
 // import PlayingCard from "@/components/playing-card"
 import InvitePlayersModal from "@/components/game/invite-players-modal"
+import ChipManagementModal from "@/components/game/chip-management-modal"
 import GameChat from "@/components/game/game-chat"
 import PokerTableLayout from "@/components/game/poker-table-layout"
 import CurrentPlayerCards from "@/components/game/current-player-cards"
@@ -29,6 +30,7 @@ interface Player {
   hasActed: boolean
   isBot?: boolean
   joinedAt: string
+  handContribution?: number // Track total contributions for current hand
 }
 
 interface GameState {
@@ -142,7 +144,9 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   useEffect(() => {
     if (!game || game.status === 'paused' || game.gameState.gamePhase === 'showdown') return
     
-    const currentPlayerData = game.players[game.gameState.currentPlayer]
+    // Get sorted players to match the currentPlayer index
+    const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
+    const currentPlayerData = sortedPlayers[game.gameState.currentPlayer]
     if (currentPlayerData?.isBot && game.status === 'active') {
       const handStrength = evaluateBotHandStrength(currentPlayerData.cards)
       const maxBet = Math.max(...game.players.map((p) => p.currentBet))
@@ -368,7 +372,8 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       hasActed: false,
         isDealer: false,
         isSmallBlind: false,
-        isBigBlind: false
+        isBigBlind: false,
+        handContribution: 0 // Reset hand contribution for new hand
       }
     })
 
@@ -402,14 +407,25 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     
     updatedPlayers[sbPlayerIndex].currentBet = game.settings.smallBlind
     updatedPlayers[sbPlayerIndex].chips -= game.settings.smallBlind
+    updatedPlayers[sbPlayerIndex].handContribution = game.settings.smallBlind
     updatedPlayers[bbPlayerIndex].currentBet = game.settings.bigBlind
     updatedPlayers[bbPlayerIndex].chips -= game.settings.bigBlind
+    updatedPlayers[bbPlayerIndex].handContribution = game.settings.bigBlind
+
+    // For preflop, first to act is player after big blind
+    let firstToActPreflop = (newBigBlindIndex + 1) % sortedPlayers.length
+    let searchCount = 0
+    // Skip any folded/all-in players
+    while ((sortedPlayers[firstToActPreflop].folded || sortedPlayers[firstToActPreflop].allIn) && searchCount < sortedPlayers.length) {
+      firstToActPreflop = (firstToActPreflop + 1) % sortedPlayers.length
+      searchCount++
+    }
 
     const newGameState: GameState = {
       deck: remainingDeck,
       communityCards: [],
-      pot: game.settings.smallBlind + game.settings.bigBlind,
-      currentPlayer: (newBigBlindIndex + 1) % sortedPlayers.length,
+      pot: 0, // Pot will be calculated dynamically from handContributions
+      currentPlayer: firstToActPreflop,
       gamePhase: "preflop",
       dealerPosition: newDealerIndex,
       smallBlindPosition: newSmallBlindIndex,
@@ -507,6 +523,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
             ...player,
             currentBet: player.currentBet + callAmount,
             chips: player.chips - callAmount,
+            handContribution: (player.handContribution || 0) + callAmount,
             allIn: player.chips - callAmount === 0,
               hasActed: true,
             }
@@ -524,7 +541,6 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       }),
     })
 
-    await updateGameState({ pot: game.gameState.pot + callAmount })
     await nextPlayer()
   }
 
@@ -567,6 +583,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
           ...player,
           currentBet: player.currentBet + actualBet,
           chips: player.chips - actualBet,
+          handContribution: (player.handContribution || 0) + actualBet,
           allIn: player.chips - actualBet === 0,
             hasActed: true,
           }
@@ -585,7 +602,6 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       }),
     })
 
-    await updateGameState({ pot: game.gameState.pot + actualBet })
     await nextPlayer()
   }
 
@@ -658,6 +674,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
             ...player,
             currentBet: player.currentBet + callAmount,
             chips: player.chips - callAmount,
+            handContribution: (player.handContribution || 0) + callAmount,
             allIn: player.chips - callAmount === 0,
                 hasActed: true,
               }
@@ -674,8 +691,6 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
         gameData: { players: updatedPlayers }
       }),
     })
-
-    await updateGameState({ pot: game.gameState.pot + callAmount })
 
     // Bot might send a chat message
     if (Math.random() < 0.2) { // 20% chance
@@ -774,6 +789,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
           ...player,
           currentBet: player.currentBet + actualBet,
           chips: player.chips - actualBet,
+          handContribution: (player.handContribution || 0) + actualBet,
           allIn: player.chips - actualBet === 0,
           hasActed: true,
         }
@@ -791,8 +807,6 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
         gameData: { players: updatedPlayers }
       }),
     })
-
-    await updateGameState({ pot: game.gameState.pot + actualBet })
 
     // Bot might send a chat message
     if (Math.random() < 0.3) { // 30% chance - more chat for aggressive bots
@@ -839,7 +853,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
 
     // Get sorted players by seat number for proper rotation
     const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
-    const currentPlayerIndex = sortedPlayers.findIndex((_, i) => i === game.gameState.currentPlayer)
+    const currentPlayerIndex = game.gameState.currentPlayer
     
     let nextIndex = (currentPlayerIndex + 1) % sortedPlayers.length
     
@@ -860,7 +874,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     // Check if betting round is complete
     const maxBet = Math.max(...game.players.map((p) => p.currentBet))
     const allActed = activePlayers.every((p) => p.hasActed && p.currentBet === maxBet)
-    
+
     // Check if we're going back to a player who already acted and matched the current max bet
     // BUT: In preflop, big blind always gets option to act even if they posted the blind
     const nextPlayerData = sortedPlayers[nextIndex]
@@ -878,7 +892,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   const nextPhase = async () => {
     if (!game) return
 
-    // Reset player actions for next phase
+    // Reset player actions for next phase but preserve hand contributions
     const resetPlayers = game.players.map((p) => ({ ...p, hasActed: false, currentBet: 0 }))
 
     let newCommunityCards = [...game.gameState.communityCards]
@@ -906,11 +920,18 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       return
     }
 
-    // Set current player to first active player after dealer in seat order
+    // Set current player to first active player after dealer (small blind first post-flop)
     const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
-    let firstActiveIndex = 0
-    while (sortedPlayers[firstActiveIndex].folded || sortedPlayers[firstActiveIndex].allIn) {
+    
+    // Find dealer position in sorted array
+    const dealerIndex = sortedPlayers.findIndex(p => p.isDealer)
+    
+    // Start looking after dealer position for first active player
+    let firstActiveIndex = (dealerIndex + 1) % sortedPlayers.length
+    let searchCount = 0
+    while ((sortedPlayers[firstActiveIndex].folded || sortedPlayers[firstActiveIndex].allIn) && searchCount < sortedPlayers.length) {
       firstActiveIndex = (firstActiveIndex + 1) % sortedPlayers.length
+      searchCount++
     }
 
     await fetch("/api/games", {
@@ -936,12 +957,19 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     if (!game) return
 
     const activePlayers = game.players.filter((p) => !p.folded)
+    let winnerPlayerId: string | null = null
+    let winnerUsername = ""
+
     if (activePlayers.length === 1) {
-      setWinner(activePlayers[0].username)
+      winnerPlayerId = activePlayers[0].playerId
+      winnerUsername = activePlayers[0].username
+      setWinner(winnerUsername)
+      
       // Award pot to winner
+      const currentPot = calculateCurrentPot()
       const updatedPlayers = game.players.map((p) =>
-        p.playerId === activePlayers[0].playerId 
-          ? { ...p, chips: p.chips + game.gameState.pot }
+        p.playerId === winnerPlayerId 
+          ? { ...p, chips: p.chips + currentPot }
           : p
       )
 
@@ -964,12 +992,15 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
 
       playerHands.sort((a, b) => compareHands(b.hand, a.hand))
       const winner = playerHands[0]
+      winnerPlayerId = winner.player.playerId
+      winnerUsername = winner.player.username
 
-      setWinner(winner.player.username)
+      setWinner(winnerUsername)
       
+      const currentPot = calculateCurrentPot()
       const updatedPlayers = game.players.map((p) =>
-        p.playerId === winner.player.playerId 
-          ? { ...p, chips: p.chips + game.gameState.pot }
+        p.playerId === winnerPlayerId 
+          ? { ...p, chips: p.chips + currentPot }
           : p
       )
 
@@ -985,7 +1016,60 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       })
     }
 
-    await updateGameState({ pot: 0, gamePhase: "showdown" })
+    // Update player stats for all players who were dealt cards
+    const realDollarMultiplier = (game.settings as any).realDollarMultiplier || 0.01
+    
+    for (const player of game.players) {
+      if (player.cards && player.cards.length > 0) { // Player was dealt cards
+        const isWinner = player.playerId === winnerPlayerId
+        const wasDealtHand = true
+        // Player "played" if they didn't fold preflop or saw at least the flop
+        const playedHand = !player.folded || game.gameState.gamePhase !== 'preflop'
+        
+                 // Calculate net earnings for this hand using tracked contributions
+         const potContribution = player.handContribution || 0
+        
+        let netEarnings = 0
+        if (isWinner) {
+          netEarnings = calculateCurrentPot() - potContribution
+        } else {
+          netEarnings = -potContribution
+        }
+
+        const gameStats = {
+          gameId: game._id,
+          handsDealt: 1,
+          handsPlayed: playedHand ? 1 : 0,
+          handsWon: isWinner ? 1 : 0,
+          netEarnings: netEarnings
+        }
+
+        // Update player stats
+        try {
+          await fetch("/api/players", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              action: "updateStats",
+              playerId: player.playerId,
+              gameStats: gameStats
+            }),
+          })
+        } catch (error) {
+          console.error("Error updating player stats:", error)
+        }
+      }
+    }
+
+    await updateGameState({ gamePhase: "showdown" })
+  }
+
+  // Calculate current pot from all player hand contributions
+  const calculateCurrentPot = () => {
+    if (!game) return 0
+    return game.players.reduce((total, player) => total + (player.handContribution || 0), 0)
   }
 
   const handleSeatChange = async (newSeatNumber: number) => {
@@ -1065,8 +1149,32 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   const canCall = currentPlayerData && currentPlayerData.currentBet < maxBet
   const canCheck = currentPlayerData && currentPlayerData.currentBet === maxBet
   const canRaise = currentPlayerData && currentPlayerData.chips > 0
-  const isCurrentPlayerTurn = game.players[game.gameState.currentPlayer]?.playerId === currentPlayer._id
+  // Simple turn detection using sorted players
+  const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
+  const currentTurnPlayer = sortedPlayers[game.gameState.currentPlayer]
+  const isCurrentPlayerTurn = currentTurnPlayer?.playerId === currentPlayer._id
+
+  // Debug info
+  console.log('Turn order debug:', {
+    gamePhase: game.gameState.gamePhase,
+    currentPlayerData: currentPlayerData ? { username: currentPlayerData.username, cards: currentPlayerData.cards?.length } : null,
+    currentTurnPlayer: currentTurnPlayer?.username,
+    isCurrentPlayerTurn,
+    gameCurrentPlayer: game.gameState.currentPlayer,
+    dealer: sortedPlayers.find(p => p.isDealer)?.username,
+    smallBlind: sortedPlayers.find(p => p.isSmallBlind)?.username,
+    bigBlind: sortedPlayers.find(p => p.isBigBlind)?.username
+  })
   const isGameCreator = game.createdBy === currentPlayer._id
+  
+  // Check if current player is a captain
+  const isGameCaptain = (game.settings as any).gameCaptains?.includes(currentPlayer.username) || false
+  
+  // Check if current player can manage the game (creator or captain)
+  const canManageGame = isGameCreator || isGameCaptain
+  
+  // Check if current player can invite others
+  const canInvitePlayers = isGameCreator || isGameCaptain || (game.settings as any).allowPlayersToInvite
 
   return (
     <div className="min-h-screen bg-green-900 p-2 sm:p-4">
@@ -1077,9 +1185,9 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
           <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">Back to Dashboard</span>
             <span className="sm:hidden">Back</span>
-          </Button>
-          
-          {isGameCreator && game.status !== 'waiting' && (
+        </Button>
+
+          {canManageGame && game.status !== 'waiting' && (
             <>
               <Button 
                 variant="outline" 
@@ -1099,16 +1207,29 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
                   </>
                 )}
         </Button>
-              
-              <div className="flex-shrink-0">
-                <InvitePlayersModal
-                  gameId={game._id}
-                  currentPlayers={game.players}
-                  maxPlayers={game.settings.maxPlayers}
-                  onInviteSent={fetchGame}
-                />
-              </div>
             </>
+          )}
+
+          {canInvitePlayers && game.status !== 'waiting' && (
+            <div className="flex-shrink-0">
+              <InvitePlayersModal
+                gameId={game._id}
+                currentPlayers={game.players}
+                maxPlayers={game.settings.maxPlayers}
+                onInviteSent={fetchGame}
+              />
+          </div>
+          )}
+
+          {isGameCreator && game.status !== 'waiting' && (
+            <div className="flex-shrink-0">
+              <ChipManagementModal
+                gameId={game._id}
+                players={game.players}
+                realDollarMultiplier={(game.settings as any).realDollarMultiplier || 0.01}
+                onChipsUpdated={fetchGame}
+              />
+            </div>
           )}
         </div>
 
@@ -1159,22 +1280,23 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
                 currentPlayer={currentPlayer}
                 gamePhase={game.gameState.gamePhase}
                 communityCards={game.gameState.communityCards}
-                pot={game.gameState.pot}
+                pot={calculateCurrentPot()}
                 maxPlayers={game.settings.maxPlayers}
                 gameStatus={game.status}
                 isGameCreator={isGameCreator}
                 currentPlayerTurn={game.gameState.currentPlayer}
                 onSeatSelect={handleSeatChange}
                 canChangeSeat={game.status === 'waiting' || game.status === 'paused'}
+                gameCaptains={(game.settings as any).gameCaptains || []}
               />
-            </div>
+              </div>
 
             {/* Game Controls */}
             {game.status === 'paused' ? (
-              <div className="text-center">
+                    <div className="text-center">
                 <h2 className="text-2xl font-bold text-white mb-4">Game Paused</h2>
                 <p className="text-white">Waiting for the game creator to resume...</p>
-              </div>
+                      </div>
             ) : game.gameState.gamePhase === "showdown" ? (
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-white mb-4">Winner: {winner}</h2>
@@ -1200,8 +1322,8 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
               <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 items-center px-4 sm:px-0">
                 <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
                   <Button onClick={fold} variant="destructive" size="lg" className="flex-1 sm:flex-none min-h-12">
-                    Fold
-                  </Button>
+                  Fold
+                </Button>
 
                   {canCheck && (
                     <Button onClick={check} variant="secondary" size="lg" className="flex-1 sm:flex-none min-h-12">

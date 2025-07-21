@@ -79,6 +79,24 @@ export default function PokerApp() {
   const handleBackToDashboard = () => {
     setCurrentGameId(null)
     setAppState('dashboard')
+    // Refresh player data to show updated stats
+    refreshPlayerData()
+  }
+
+  const refreshPlayerData = async () => {
+    if (!currentPlayer) return
+    
+    try {
+      const response = await fetch(`/api/players?playerId=${currentPlayer._id}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCurrentPlayer(data)
+        localStorage.setItem('pokerPlayer', JSON.stringify(data))
+      }
+    } catch (error) {
+      console.error("Error refreshing player data:", error)
+    }
   }
 
   const handleBackToSetup = () => {

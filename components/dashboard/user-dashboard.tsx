@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Plus, Users, TrendingUp, Target, Archive } from "lucide-react"
+import { LogOut, Plus, Users, TrendingUp, Target, Archive, DollarSign, Trash2, Crown } from "lucide-react"
 
 interface Player {
   _id: string
@@ -57,10 +57,6 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    fetchGames()
-  }, [player._id])
-
   const fetchGames = async () => {
     try {
       setLoading(true)
@@ -83,6 +79,30 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
       setError("Network error occurred")
     } finally {
       setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchGames()
+    // Silently clean up orphaned stats in background
+    silentCleanup()
+  }, [player._id])
+
+  const silentCleanup = async () => {
+    try {
+      await fetch("/api/players", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "cleanupStats",
+          playerId: player._id
+        }),
+      })
+      // Don't show any UI feedback - just let it clean up silently
+    } catch (error) {
+      // Fail silently
     }
   }
 
@@ -142,6 +162,53 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
     }
   }
 
+  const handleDeleteGame = async (gameId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this game? This action cannot be undone.")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/games?gameId=${gameId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        await fetchGames() // Refresh the games list
+        setError("") // Clear any existing errors
+      } else {
+        setError(data.error || "Failed to delete game")
+      }
+    } catch (error) {
+      setError("Network error occurred")
+    }
+  }
+
+  const cleanupPlayerStats = async () => {
+    try {
+      const response = await fetch("/api/players", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "cleanupStats",
+          playerId: player._id
+        }),
+      })
+
+      if (response.ok) {
+        // Just refresh the page to load clean data
+        window.location.reload()
+      } else {
+        setError("Failed to cleanup stats")
+      }
+    } catch (error) {
+      setError("Network error occurred during cleanup")
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return `$${amount.toLocaleString()}`
   }
@@ -149,6 +216,35 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
   const formatPercentage = (percentage: number) => {
     return `${percentage.toFixed(1)}%`
   }
+
+  const calculateRealDollarStats = () => {
+    const realDollarStats: Array<{ gameName: string; realValue: number }> = []
+
+    // Calculate real dollar values for games with real dollar multiplier
+    // Note: Deleted games are automatically excluded since they're removed from the database
+    playerGames.forEach(game => {
+      if ((game.settings as any).realDollarMultiplier) {
+        const multiplier = (game.settings as any).realDollarMultiplier
+        const playerInGame = game.players.find((p: any) => p.playerId === player._id) as any
+        
+        if (playerInGame && playerInGame.chips !== undefined) {
+          const startingChips = game.settings.startingChips
+          const currentChips = playerInGame.chips
+          const chipDifference = currentChips - startingChips
+          const realValue = parseFloat((chipDifference * multiplier).toFixed(2))
+          
+          realDollarStats.push({
+            gameName: game.gameName + (game.status !== 'completed' ? ` (${game.status})` : ''),
+            realValue: realValue
+          })
+        }
+      }
+    })
+
+    return realDollarStats
+  }
+
+
 
   return (
     <div className="min-h-screen bg-green-900 p-4">
@@ -194,7 +290,30 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
                   <div className={`text-2xl font-bold ${player.stats.netEarnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(player.stats.netEarnings)}
                   </div>
-                  <div className="text-sm text-muted-foreground">Net Earnings</div>
+                  <div className="text-sm text-muted-foreground">Net Earnings (Chips)</div>
+                </div>
+              </div>
+
+              {/* Real Dollar Value Section */}
+              <div className="pt-4 border-t">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Real Dollar Value
+                </h4>
+                <div className="space-y-2">
+                  {calculateRealDollarStats().map((stat, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-green-50 rounded">
+                      <span className="text-sm font-medium">{stat.gameName}</span>
+                                             <span className={`text-sm font-bold ${stat.realValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                         ${stat.realValue.toFixed(2)}
+                       </span>
+                    </div>
+                  ))}
+                  {calculateRealDollarStats().length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      No real dollar tracking available for your games
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -206,6 +325,19 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
                 <div className="flex justify-between text-sm">
                   <span>Total Losses:</span>
                   <span className="text-red-600">{formatCurrency(player.stats.totalLosses)}</span>
+                </div>
+                <div className="pt-2">
+                  <Button 
+                    variant="outline"
+                    size="sm" 
+                    onClick={cleanupPlayerStats}
+                    className="w-full text-xs"
+                  >
+                    Clean Up Stats
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center mt-1">
+                    Remove stats from deleted games
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -262,23 +394,35 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
                         <Badge variant={game.status === 'active' ? 'default' : 'secondary'}>
                           {game.status}
                         </Badge>
-                        {game.createdBy === player._id && game.status !== 'archived' && (
-                          <Button 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={() => handleArchiveGame(game._id)}
-                          >
-                            <Archive className="w-4 h-4 mr-1" />
-                            Archive
-                          </Button>
+                        {game.createdBy === player._id && (
+                          <>
+                            {game.status !== 'archived' && (
+                              <Button 
+                                variant="destructive" 
+                                size="sm"
+                                onClick={() => handleArchiveGame(game._id)}
+                              >
+                                <Archive className="w-4 h-4 mr-1" />
+                                Archive
+                              </Button>
+                            )}
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => handleDeleteGame(game._id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Delete
+                            </Button>
+                          </>
                         )}
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => onJoinGame(game._id)}
-                          disabled={game.status === 'archived'}
                         >
-                          {game.status === 'active' ? 'Rejoin' : 'Enter'}
+                          Join Game
                         </Button>
                       </div>
                     </div>

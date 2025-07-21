@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import PlayingCard from "@/components/playing-card"
 
 // Mobile Player Card Component
-function MobilePlayerCard({ seat, isCurrentPlayer, isCurrentTurn, showChips, onTap }: {
+function MobilePlayerCard({ seat, isCurrentPlayer, isCurrentTurn, showChips, onTap, isPlayerCaptain }: {
   seat: any
   isCurrentPlayer: boolean
   isCurrentTurn: boolean
   showChips: boolean
   onTap: () => void
+  isPlayerCaptain: (username: string) => boolean
 }) {
   return (
     <Card 
@@ -32,6 +33,7 @@ function MobilePlayerCard({ seat, isCurrentPlayer, isCurrentTurn, showChips, onT
             {seat.player.isDealer && <Badge variant="outline" className="text-xs px-1">D</Badge>}
             {seat.player.isSmallBlind && <Badge variant="outline" className="text-xs px-1">SB</Badge>}
             {seat.player.isBigBlind && <Badge variant="outline" className="text-xs px-1">BB</Badge>}
+            {isPlayerCaptain(seat.player.username) && <Badge variant="secondary" className="text-xs px-1 bg-purple-600">CAPT</Badge>}
           </div>
 
           {/* Player name */}
@@ -122,6 +124,7 @@ interface PokerTableLayoutProps {
   currentPlayerTurn: number
   onSeatSelect?: (seatNumber: number) => void
   canChangeSeat: boolean
+  gameCaptains?: string[]
 }
 
 export default function PokerTableLayout({
@@ -135,7 +138,8 @@ export default function PokerTableLayout({
   isGameCreator,
   currentPlayerTurn,
   onSeatSelect,
-  canChangeSeat
+  canChangeSeat,
+  gameCaptains = []
 }: PokerTableLayoutProps) {
   // State for mobile chip display
   const [showChipsForPlayer, setShowChipsForPlayer] = useState<string | null>(null)
@@ -143,6 +147,11 @@ export default function PokerTableLayout({
   // Handle mobile player tap
   const handleMobilePlayerTap = (playerId: string) => {
     setShowChipsForPlayer(showChipsForPlayer === playerId ? null : playerId)
+  }
+
+  // Check if player is a captain
+  const isPlayerCaptain = (username: string) => {
+    return gameCaptains.includes(username)
   }
 
   // Create array of 8 seats
@@ -161,7 +170,11 @@ export default function PokerTableLayout({
   }
 
   const isCurrentPlayerTurnSeat = (seatNumber: number) => {
-    return currentPlayerTurn === seatNumber
+    // currentPlayerTurn is an index into the sorted players array
+    // We need to get the actual seat number of the player at that index
+    const sortedPlayers = [...players].sort((a, b) => a.seatNumber - b.seatNumber)
+    const currentTurnPlayer = sortedPlayers[currentPlayerTurn]
+    return currentTurnPlayer?.seatNumber === seatNumber
   }
 
   const handleSeatClick = (seatNumber: number) => {
@@ -202,6 +215,7 @@ export default function PokerTableLayout({
                     isCurrentTurn={isCurrentPlayerTurnSeat(seat.seatNumber) && gamePhase !== 'showdown'}
                     showChips={showChipsForPlayer === seat.player.playerId}
                     onTap={() => seat.player && handleMobilePlayerTap(seat.player.playerId)}
+                    isPlayerCaptain={isPlayerCaptain}
                   />
                 ) : (
                   <MobileEmptySeat 
@@ -245,6 +259,7 @@ export default function PokerTableLayout({
                     isCurrentTurn={isCurrentPlayerTurnSeat(seat.seatNumber) && gamePhase !== 'showdown'}
                     showChips={showChipsForPlayer === seat.player.playerId}
                     onTap={() => seat.player && handleMobilePlayerTap(seat.player.playerId)}
+                    isPlayerCaptain={isPlayerCaptain}
                   />
                 ) : (
                   <MobileEmptySeat 
@@ -305,6 +320,7 @@ export default function PokerTableLayout({
                       {seat.player.isSmallBlind && <Badge variant="outline" className="text-xs">SB</Badge>}
                       {seat.player.isBigBlind && <Badge variant="outline" className="text-xs">BB</Badge>}
                       {seat.player.isBot && <Badge variant="secondary" className="text-xs bg-blue-600">BOT</Badge>}
+                      {isPlayerCaptain(seat.player.username) && <Badge variant="secondary" className="text-xs bg-purple-600">CAPT</Badge>}
                     </div>
 
                     {/* Player name */}

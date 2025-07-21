@@ -210,6 +210,38 @@ export async function POST(request) {
         const seatResult = await updateGame(seatGameId, { players: updatedPlayersForSeat })
         return NextResponse.json({ success: true, data: seatResult })
 
+      case "addChipsToPlayer":
+        const { gameId: chipGameId, playerId: chipPlayerId, chipAmount } = body
+        if (!chipGameId || !chipPlayerId || !chipAmount) {
+          return NextResponse.json({ error: "gameId, playerId, and chipAmount are required" }, { status: 400 })
+        }
+
+        if (chipAmount <= 0) {
+          return NextResponse.json({ error: "Chip amount must be positive" }, { status: 400 })
+        }
+
+        // Get the game
+        const chipGame = await getGameById(chipGameId)
+        if (!chipGame) {
+          return NextResponse.json({ error: "Game not found" }, { status: 404 })
+        }
+
+        // Find the player and add chips
+        const updatedPlayersForChips = chipGame.players.map(player => 
+          player.playerId === chipPlayerId 
+            ? { ...player, chips: player.chips + chipAmount }
+            : player
+        )
+
+        // Check if player was found
+        const playerFound = chipGame.players.some(p => p.playerId === chipPlayerId)
+        if (!playerFound) {
+          return NextResponse.json({ error: "Player not found in game" }, { status: 404 })
+        }
+
+        const chipResult = await updateGame(chipGameId, { players: updatedPlayersForChips })
+        return NextResponse.json({ success: true, data: chipResult })
+
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }

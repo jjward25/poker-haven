@@ -26,14 +26,9 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
   const [blindIncreaseFrequency, setBlindIncreaseFrequency] = useState(20)
   const [straddlingAllowed, setStraddlingAllowed] = useState(false)
   const [maxPlayers, setMaxPlayers] = useState(8)
-  const [customChipBreakdown, setCustomChipBreakdown] = useState(false)
-  const [chipBreakdown, setChipBreakdown] = useState({
-    chip1: { value: 1, count: 20 },
-    chip5: { value: 5, count: 20 },
-    chip25: { value: 25, count: 20 },
-    chip100: { value: 100, count: 20 },
-    chip500: { value: 500, count: 10 }
-  })
+  const [realDollarMultiplier, setRealDollarMultiplier] = useState(0.01)
+  const [allowPlayersToInvite, setAllowPlayersToInvite] = useState(false)
+  const [gameCaptains, setGameCaptains] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -61,13 +56,15 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
     try {
       const gameSettings = {
         startingChips,
-        chipBreakdown: customChipBreakdown ? chipBreakdown : null,
+        realDollarMultiplier,
         smallBlind,
         bigBlind,
         blindIncreaseAmount,
         blindIncreaseFrequency,
         straddlingAllowed,
-        maxPlayers
+        maxPlayers,
+        allowPlayersToInvite,
+        gameCaptains: gameCaptains.split(',').map(c => c.trim()).filter(c => c)
       }
 
       const response = await fetch("/api/games", {
@@ -100,20 +97,9 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
     }
   }
 
-  const updateChipBreakdown = (chip: keyof typeof chipBreakdown, field: 'value' | 'count', value: number) => {
-    setChipBreakdown(prev => ({
-      ...prev,
-      [chip]: {
-        ...prev[chip],
-        [field]: value
-      }
-    }))
-  }
-
-  const calculateTotalChipValue = () => {
-    return Object.values(chipBreakdown).reduce((total, chip) => {
-      return total + (chip.value * chip.count)
-    }, 0)
+  // Calculate real dollar value from starting chips and multiplier
+  const calculateRealDollarValue = () => {
+    return (startingChips * realDollarMultiplier).toFixed(2)
   }
 
   return (
@@ -218,55 +204,31 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
                 />
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="customChipBreakdown"
-                  checked={customChipBreakdown}
-                  onCheckedChange={setCustomChipBreakdown}
+              <div className="space-y-2">
+                <Label htmlFor="realDollarMultiplier">Real Dollar Multiplier</Label>
+                <Input
+                  id="realDollarMultiplier"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  max="100"
+                  value={realDollarMultiplier}
+                  onChange={(e) => setRealDollarMultiplier(Number(e.target.value))}
                   disabled={loading}
+                  placeholder="0.01"
                 />
-                <Label htmlFor="customChipBreakdown">Custom chip breakdown</Label>
-              </div>
-
-              {customChipBreakdown && (
-                <div className="space-y-3 p-4 border rounded">
-                  <h4 className="font-semibold">Chip Breakdown</h4>
-                  {Object.entries(chipBreakdown).map(([key, chip]) => (
-                    <div key={key} className="grid grid-cols-3 gap-2 items-center">
-                      <Label className="text-sm">Chip {key.slice(-1)}</Label>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Value</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={chip.value}
-                          onChange={(e) => updateChipBreakdown(key as keyof typeof chipBreakdown, 'value', Number(e.target.value))}
-                          disabled={loading}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Count</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={chip.count}
-                          onChange={(e) => updateChipBreakdown(key as keyof typeof chipBreakdown, 'count', Number(e.target.value))}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t text-sm">
-                    <strong>Total Value: ${calculateTotalChipValue().toLocaleString()}</strong>
-                    {calculateTotalChipValue() !== startingChips && (
-                      <p className="text-red-600">
-                        Warning: Chip breakdown total (${calculateTotalChipValue().toLocaleString()}) 
-                        doesn&apos;t match starting chips (${startingChips.toLocaleString()})
-                      </p>
-                    )}
+                <div className="text-sm text-muted-foreground">
+                  <strong>Example:</strong> Real Dollar Multiplier of {realDollarMultiplier} with starting chips of {startingChips.toLocaleString()} means ${calculateRealDollarValue()} Real Dollar Value.
+                </div>
+                <div className="p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="text-lg font-semibold text-green-700">
+                    Real Dollar Value: ${calculateRealDollarValue()}
+                  </div>
+                  <div className="text-sm text-green-600">
+                    Each player starts with ${calculateRealDollarValue()} worth of chips
                   </div>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
 
@@ -338,6 +300,45 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
                 />
                 <Label htmlFor="straddlingAllowed">Allow straddling</Label>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Management Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Management Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="gameCaptains">Game Captains (Optional)</Label>
+                <Input
+                  id="gameCaptains"
+                  type="text"
+                  value={gameCaptains}
+                  onChange={(e) => setGameCaptains(e.target.value)}
+                  placeholder="username1, username2, username3"
+                  disabled={loading}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Captains can pause/resume the game alongside the organizer. Enter usernames separated by commas.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="allowPlayersToInvite"
+                  checked={allowPlayersToInvite}
+                  onCheckedChange={setAllowPlayersToInvite}
+                  disabled={loading}
+                />
+                <Label htmlFor="allowPlayersToInvite">Allow all players to invite others</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                When enabled, any player in the game can invite other players. When disabled, only the organizer and captains can invite.
+              </p>
             </CardContent>
           </Card>
 

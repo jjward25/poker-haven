@@ -6,7 +6,8 @@ import {
   deletePlayer,
   authenticatePlayer,
   updatePlayerStats,
-  getPlayerByUsername
+  getPlayerByUsername,
+  cleanupOrphanedStats
 } from "@/lib/mongo/playersCRUD"
 import { NextResponse } from "next/server"
 
@@ -92,6 +93,19 @@ export async function POST(request) {
 
         const result = await updatePlayerStats(playerId, gameStats)
         return NextResponse.json({ success: true, data: result })
+
+      case "cleanupStats":
+        const { playerId: cleanupPlayerId } = body
+        if (!cleanupPlayerId) {
+          return NextResponse.json({ error: "playerId is required" }, { status: 400 })
+        }
+
+        const cleanupResult = await cleanupOrphanedStats(cleanupPlayerId)
+        return NextResponse.json({ 
+          success: true, 
+          data: cleanupResult,
+          message: `Cleaned up ${cleanupResult.cleanedEntries} orphaned entries, ${cleanupResult.validEntries} entries remain`
+        })
 
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 })
