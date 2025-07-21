@@ -90,7 +90,7 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
 
   const silentCleanup = async () => {
     try {
-      await fetch("/api/players", {
+      const response = await fetch("/api/players", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +100,19 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
           playerId: player._id
         }),
       })
-      // Don't show any UI feedback - just let it clean up silently
+      
+      if (response.ok) {
+        const data = await response.json()
+        // Only reload if stats were actually cleaned up
+        if (data.data && data.data.cleanedEntries > 0) {
+          const playerResponse = await fetch(`/api/players?playerId=${player._id}`)
+          if (playerResponse.ok) {
+            const updatedPlayer = await playerResponse.json()
+            localStorage.setItem('pokerPlayer', JSON.stringify(updatedPlayer))
+            window.location.reload()
+          }
+        }
+      }
     } catch (error) {
       // Fail silently
     }

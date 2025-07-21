@@ -147,6 +147,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     // Get sorted players to match the currentPlayer index
     const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
     const currentPlayerData = sortedPlayers[game.gameState.currentPlayer]
+    
     if (currentPlayerData?.isBot && game.status === 'active') {
       const handStrength = evaluateBotHandStrength(currentPlayerData.cards)
       const maxBet = Math.max(...game.players.map((p) => p.currentBet))
@@ -303,7 +304,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
         }
       }, 1500) // Add delay to make it feel more natural
     }
-  }, [game?.gameState.currentPlayer, game?.status])
+  }, [game?.gameState.currentPlayer, game?.status, game?.gameState.gamePhase])
 
   const fetchGame = async () => {
     try {
@@ -412,13 +413,22 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     updatedPlayers[bbPlayerIndex].chips -= game.settings.bigBlind
     updatedPlayers[bbPlayerIndex].handContribution = game.settings.bigBlind
 
-    // For preflop, first to act is player after big blind
-    let firstToActPreflop = (newBigBlindIndex + 1) % sortedPlayers.length
-    let searchCount = 0
-    // Skip any folded/all-in players
-    while ((sortedPlayers[firstToActPreflop].folded || sortedPlayers[firstToActPreflop].allIn) && searchCount < sortedPlayers.length) {
-      firstToActPreflop = (firstToActPreflop + 1) % sortedPlayers.length
-      searchCount++
+    // FIXED: Pre-flop turn order depends on number of players
+    let firstToActPreflop
+    const activePlayersCount = sortedPlayers.filter(p => !p.folded && !p.allIn).length
+    
+    if (activePlayersCount === 2) {
+      // HEADS-UP: Small blind (dealer) acts first pre-flop
+      firstToActPreflop = newSmallBlindIndex
+    } else {
+      // FULL TABLE: Player after big blind acts first pre-flop (UTG)
+      firstToActPreflop = (newBigBlindIndex + 1) % sortedPlayers.length
+      let searchCount = 0
+      // Skip any folded/all-in players
+      while ((sortedPlayers[firstToActPreflop].folded || sortedPlayers[firstToActPreflop].allIn) && searchCount < sortedPlayers.length) {
+        firstToActPreflop = (firstToActPreflop + 1) % sortedPlayers.length
+        searchCount++
+      }
     }
 
     const newGameState: GameState = {
@@ -503,7 +513,34 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     // Check if only one player remains after this fold
     const activePlayers = updatedPlayers.filter((p) => !p.folded && !p.allIn)
     if (activePlayers.length <= 1) {
-      await determineWinner()
+      // CRITICAL FIX: When someone folds, the REMAINING player wins, not the folder!
+      // Use the updated players to determine winner correctly
+      const activePlayersAfterFold = updatedPlayers.filter((p) => !p.folded)
+      if (activePlayersAfterFold.length === 1) {
+        const winnerPlayer = activePlayersAfterFold[0]
+
+        setWinner(winnerPlayer.username)
+        
+        const currentPot = calculateCurrentPot()
+        const finalPlayers = updatedPlayers.map((p) =>
+          p.playerId === winnerPlayer.playerId 
+            ? { ...p, chips: p.chips + currentPot }
+            : p
+        )
+
+        await fetch("/api/games", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            gameId: game._id,
+            gameData: { players: finalPlayers }
+          }),
+        })
+
+        await updateGameState({ gamePhase: "showdown" })
+      }
       return
     }
 
@@ -547,6 +584,8 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   const check = async () => {
     const playerData = getCurrentPlayerData()
     if (!playerData || !game) return
+
+
 
     const updatedPlayers = game.players.map((player) =>
       player.playerId === currentPlayer._id 
@@ -625,32 +664,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       }),
     })
 
-    // Bot might send a chat message
-    if (Math.random() < 0.15) { // 15% chance
-      const foldMessages = [
-        "I fold, too risky!",
-        "Not feeling this hand",
-        "Folding to save my chips",
-        "Better luck next hand",
-        "This hand isn't for me",
-        "Too rich for my blood",
-        "I'm out",
-        "Fold"
-      ]
-      
-      await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          gameId: game._id,
-          playerId: botPlayer.playerId,
-          username: botPlayer.username,
-          message: foldMessages[Math.floor(Math.random() * foldMessages.length)]
-        }),
-      })
-    }
+
 
     // Check if only one player remains after bot fold
     const activePlayers = updatedPlayers.filter((p) => !p.folded && !p.allIn)
@@ -692,54 +706,15 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       }),
     })
 
-    // Bot might send a chat message
-    if (Math.random() < 0.2) { // 20% chance
-      let callMessages = [
-        "I'll call that!",
-        "Let's see the next card",
-        "Calling to stay in",
-        "Good enough to call",
-        "I'm in!",
-        "Count me in",
-        "I like those odds",
-        "Can't fold this hand",
-        "Playing this one",
-        "Worth a call"
-      ]
-      
-      // Special messages for small blind defense
-      if (botPlayer.isSmallBlind && game.players.filter(p => !p.folded && !p.allIn).length === 2) {
-        callMessages = [
-          "Defending my small blind",
-          "I'm already invested",
-          "Getting good odds here",
-          "Can't fold for half a bet",
-          "Small blind defense",
-          "Let's play heads up",
-          "Worth defending",
-          "I'm in from the small blind"
-        ]
-      }
-      
-      await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          gameId: game._id,
-          playerId: botPlayer.playerId,
-          username: botPlayer.username,
-          message: callMessages[Math.floor(Math.random() * callMessages.length)]
-        }),
-      })
-    }
+
 
     await nextPlayer()
   }
 
   const botCheck = async (botPlayer: Player) => {
     if (!game) return
+
+
 
     const updatedPlayers = game.players.map((player) =>
       player.playerId === botPlayer.playerId 
@@ -808,42 +783,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       }),
     })
 
-    // Bot might send a chat message
-    if (Math.random() < 0.3) { // 30% chance - more chat for aggressive bots
-      const raiseMessages = [
-        "I'm raising the stakes!",
-        "Let's make this interesting",
-        "Time to up the ante",
-        "I like my hand",
-        "Raising!",
-        "Going big!",
-        "Pot odds look good",
-        "Feeling aggressive today",
-        "Let's build this pot",
-        "I'm in to win!",
-        "Time to apply pressure",
-        "Let's see who's serious",
-        "Building the pot!",
-        "No backing down",
-        "Gotta bet to win",
-        "Playing to win big",
-        "This hand has potential",
-        "All gas, no brakes!"
-      ]
-      
-      await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          gameId: game._id,
-          playerId: botPlayer.playerId,
-          username: botPlayer.username,
-          message: raiseMessages[Math.floor(Math.random() * raiseMessages.length)]
-        }),
-      })
-    }
+
 
     await nextPlayer()
   }
@@ -855,11 +795,22 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
     const currentPlayerIndex = game.gameState.currentPlayer
     
+
+    
     let nextIndex = (currentPlayerIndex + 1) % sortedPlayers.length
     
-    // Skip folded or all-in players
-    while (sortedPlayers[nextIndex].folded || sortedPlayers[nextIndex].allIn) {
+    // Skip folded or all-in players with safety counter
+    let searchCount = 0
+    while ((sortedPlayers[nextIndex].folded || sortedPlayers[nextIndex].allIn) && searchCount < sortedPlayers.length) {
       nextIndex = (nextIndex + 1) % sortedPlayers.length
+      searchCount++
+    }
+    
+    // If we've searched all players and they're all folded/all-in, something is wrong
+    if (searchCount >= sortedPlayers.length) {
+      console.error('All players are folded or all-in, cannot find next player')
+      await determineWinner()
+      return
     }
 
     // Check if only one player remains (everyone else folded)
@@ -875,18 +826,29 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     const maxBet = Math.max(...game.players.map((p) => p.currentBet))
     const allActed = activePlayers.every((p) => p.hasActed && p.currentBet === maxBet)
 
-    // Check if we're going back to a player who already acted and matched the current max bet
-    // BUT: In preflop, big blind always gets option to act even if they posted the blind
-    const nextPlayerData = sortedPlayers[nextIndex]
-    const isReturnToActedPlayer = nextPlayerData.hasActed && 
-                                  nextPlayerData.currentBet === maxBet &&
-                                  !(game.gameState.gamePhase === "preflop" && nextPlayerData.isBigBlind)
-
-    if (allActed || isReturnToActedPlayer) {
-      await nextPhase()
+         // Check if betting round is complete
+     // Special case: In preflop, if big blind has acted (checked or raised), betting round is over
+     const bigBlindPlayer = game.players.find(p => p.isBigBlind)
+     const bigBlindHasActed = bigBlindPlayer?.hasActed || false
+     
+     if (game.gameState.gamePhase === "preflop" && bigBlindHasActed) {
+       // Pre-flop: Big blind has exercised their option, move to next phase
+       await nextPhase()
+       return
+     }
+     
+     // CRITICAL FIX: Check if we're about to advance to a player who hasn't matched the current bet
+     // If so, they must act (call or fold) - don't advance the phase yet
+     const nextPlayerData = sortedPlayers[nextIndex]
+     const hasUnmatchedBets = activePlayers.some(p => !p.hasActed || p.currentBet < maxBet)
+     
+     // Only advance to next phase if ALL active players have acted AND matched the max bet
+     if (allActed && !hasUnmatchedBets) {
+       await nextPhase()
     } else {
-      await updateGameState({ currentPlayer: nextIndex })
-    }
+       // Continue with next player - they must act
+       await updateGameState({ currentPlayer: nextIndex })
+     }
   }
 
   const nextPhase = async () => {
@@ -920,19 +882,19 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       return
     }
 
-    // Set current player to first active player after dealer (small blind first post-flop)
-    const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
-    
-    // Find dealer position in sorted array
-    const dealerIndex = sortedPlayers.findIndex(p => p.isDealer)
-    
-    // Start looking after dealer position for first active player
-    let firstActiveIndex = (dealerIndex + 1) % sortedPlayers.length
-    let searchCount = 0
-    while ((sortedPlayers[firstActiveIndex].folded || sortedPlayers[firstActiveIndex].allIn) && searchCount < sortedPlayers.length) {
-      firstActiveIndex = (firstActiveIndex + 1) % sortedPlayers.length
-      searchCount++
-    }
+         // Set current player for post-flop action (should start with small blind)
+     const sortedPlayers = [...game.players].sort((a, b) => a.seatNumber - b.seatNumber)
+     
+     // Find small blind position in sorted array
+     const smallBlindIndex = sortedPlayers.findIndex(p => p.isSmallBlind)
+     
+     // Start looking from small blind position for first active player
+     let firstActiveIndex = smallBlindIndex
+     let searchCount = 0
+     while ((sortedPlayers[firstActiveIndex].folded || sortedPlayers[firstActiveIndex].allIn) && searchCount < sortedPlayers.length) {
+       firstActiveIndex = (firstActiveIndex + 1) % sortedPlayers.length
+       searchCount++
+     }
 
     await fetch("/api/games", {
       method: "PUT",
@@ -953,10 +915,10 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     })
   }
 
-  const determineWinner = async () => {
+  const determineWinnerWithPlayers = async (playersToUse: Player[]) => {
     if (!game) return
 
-    const activePlayers = game.players.filter((p) => !p.folded)
+    const activePlayers = playersToUse.filter((p) => !p.folded)
     let winnerPlayerId: string | null = null
     let winnerUsername = ""
 
@@ -967,7 +929,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       
       // Award pot to winner
       const currentPot = calculateCurrentPot()
-      const updatedPlayers = game.players.map((p) =>
+      const updatedPlayers = playersToUse.map((p) =>
         p.playerId === winnerPlayerId 
           ? { ...p, chips: p.chips + currentPot }
           : p
@@ -998,7 +960,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
       setWinner(winnerUsername)
       
       const currentPot = calculateCurrentPot()
-      const updatedPlayers = game.players.map((p) =>
+      const updatedPlayers = playersToUse.map((p) =>
         p.playerId === winnerPlayerId 
           ? { ...p, chips: p.chips + currentPot }
           : p
@@ -1019,15 +981,15 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     // Update player stats for all players who were dealt cards
     const realDollarMultiplier = (game.settings as any).realDollarMultiplier || 0.01
     
-    for (const player of game.players) {
+    for (const player of playersToUse) {
       if (player.cards && player.cards.length > 0) { // Player was dealt cards
         const isWinner = player.playerId === winnerPlayerId
         const wasDealtHand = true
         // Player "played" if they didn't fold preflop or saw at least the flop
         const playedHand = !player.folded || game.gameState.gamePhase !== 'preflop'
         
-                 // Calculate net earnings for this hand using tracked contributions
-         const potContribution = player.handContribution || 0
+        // Calculate net earnings for this hand using tracked contributions
+        const potContribution = player.handContribution || 0
         
         let netEarnings = 0
         if (isWinner) {
@@ -1064,6 +1026,11 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
     }
 
     await updateGameState({ gamePhase: "showdown" })
+  }
+
+  const determineWinner = async () => {
+    if (!game) return
+    await determineWinnerWithPlayers(game.players)
   }
 
   // Calculate current pot from all player hand contributions
@@ -1154,17 +1121,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   const currentTurnPlayer = sortedPlayers[game.gameState.currentPlayer]
   const isCurrentPlayerTurn = currentTurnPlayer?.playerId === currentPlayer._id
 
-  // Debug info
-  console.log('Turn order debug:', {
-    gamePhase: game.gameState.gamePhase,
-    currentPlayerData: currentPlayerData ? { username: currentPlayerData.username, cards: currentPlayerData.cards?.length } : null,
-    currentTurnPlayer: currentTurnPlayer?.username,
-    isCurrentPlayerTurn,
-    gameCurrentPlayer: game.gameState.currentPlayer,
-    dealer: sortedPlayers.find(p => p.isDealer)?.username,
-    smallBlind: sortedPlayers.find(p => p.isSmallBlind)?.username,
-    bigBlind: sortedPlayers.find(p => p.isBigBlind)?.username
-  })
+
   const isGameCreator = game.createdBy === currentPlayer._id
   
   // Check if current player is a captain
