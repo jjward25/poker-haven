@@ -285,7 +285,7 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground">You haven't joined any games yet.</p>
+                <p className="text-muted-foreground">You haven&apos;t joined any games yet.</p>
               )}
             </CardContent>
           </Card>
