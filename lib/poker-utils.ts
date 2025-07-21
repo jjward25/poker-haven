@@ -21,7 +21,7 @@ export function createDeck(): string[] {
     return shuffled
   }
   
-  export function dealCards(players: any[], deck: string[]) {
+  export function dealCards(players: { playerId: string; cards?: string[] }[], deck: string[]) {
     const newDeck = [...deck]
     const updatedPlayers = players.map((player) => ({
       ...player,

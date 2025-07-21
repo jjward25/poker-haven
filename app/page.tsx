@@ -43,7 +43,7 @@ export default function PokerApp() {
         const player = JSON.parse(savedPlayer)
         setCurrentPlayer(player)
         setAppState('dashboard')
-      } catch (e) {
+      } catch {
         localStorage.removeItem('pokerPlayer')
       }
     }

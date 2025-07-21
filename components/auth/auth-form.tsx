@@ -7,8 +7,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
+interface Player {
+  _id: string
+  username: string
+  stats: {
+    gamesPlayed: number
+    handsDealt: number
+    handsPlayed: number
+    handsWon: number
+    totalWinnings: number
+    totalLosses: number
+    netEarnings: number
+    winPercentage: number
+  }
+  gameHistory: Array<{
+    gameId: string
+    date: string
+    handsPlayed: number
+    handsWon: number
+    netEarnings: number
+  }>
+}
+
 interface AuthFormProps {
-  onAuthSuccess: (player: any) => void
+  onAuthSuccess: (player: Player) => void
 }
 
 export default function AuthForm({ onAuthSuccess }: AuthFormProps) {

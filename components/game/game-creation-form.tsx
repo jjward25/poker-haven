@@ -190,7 +190,7 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
                   disabled={loading}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Add AI players to fill empty seats (you'll be added automatically)
+                  Add AI players to fill empty seats (you&apos;ll be added automatically)
                 </p>
               </div>
             </CardContent>
@@ -261,7 +261,7 @@ export default function GameCreationForm({ player, onGameCreated, onBack }: Game
                     {calculateTotalChipValue() !== startingChips && (
                       <p className="text-red-600">
                         Warning: Chip breakdown total (${calculateTotalChipValue().toLocaleString()}) 
-                        doesn't match starting chips (${startingChips.toLocaleString()})
+                        doesn&apos;t match starting chips (${startingChips.toLocaleString()})
                       </p>
                     )}
                   </div>

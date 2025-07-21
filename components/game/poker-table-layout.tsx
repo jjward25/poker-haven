@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -82,7 +82,7 @@ export default function PokerTableLayout({
     }
   }
 
-  const isCurrentPlayerSeat = (seat: any) => {
+  const isCurrentPlayerSeat = (seat: { player: Player | null }) => {
     return seat.player?.playerId === currentPlayer._id
   }
 

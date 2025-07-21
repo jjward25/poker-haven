@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Plus, Users, TrendingUp, DollarSign, Target, Archive } from "lucide-react"
+import { LogOut, Plus, Users, TrendingUp, Target, Archive } from "lucide-react"
 
 interface Player {
   _id: string

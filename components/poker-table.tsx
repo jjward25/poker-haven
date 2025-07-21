@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Users, DollarSign, Clock, Pause, Play } from "lucide-react"
-import PlayingCard from "@/components/playing-card"
+// import PlayingCard from "@/components/playing-card"
 import InvitePlayersModal from "@/components/game/invite-players-modal"
 import GameChat from "@/components/game/game-chat"
 import PokerTableLayout from "@/components/game/poker-table-layout"
@@ -73,7 +73,7 @@ interface PokerTableProps {
   onBackToDashboard: () => void
 }
 
-export default function PokerTable({ gameId, currentPlayer, onBackToSetup, onBackToDashboard }: PokerTableProps) {
+export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }: PokerTableProps) {
   const [game, setGame] = useState<Game | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -927,7 +927,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToSetup, onBac
     await updateGameState({
       communityCards: newCommunityCards,
       deck: newDeck,
-      gamePhase: newPhase as any,
+      gamePhase: newPhase as "preflop" | "flop" | "turn" | "river" | "showdown",
       currentPlayer: firstActiveIndex
     })
   }

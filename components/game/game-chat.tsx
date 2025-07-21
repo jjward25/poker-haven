@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, MessageCircle, Minimize2, Maximize2 } from "lucide-react"
+import { Send, MessageCircle, Minimize2 } from "lucide-react"
 
 interface ChatMessage {
   id: string
