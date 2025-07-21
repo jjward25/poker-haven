@@ -1069,13 +1069,14 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
   const isGameCreator = game.createdBy === currentPlayer._id
 
   return (
-    <div className="min-h-screen bg-green-900 p-4">
+    <div className="min-h-screen bg-green-900 p-2 sm:p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onBackToDashboard}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sm:gap-0">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={onBackToDashboard} size="sm" className="flex-shrink-0">
+          <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Back to Dashboard</span>
+            <span className="sm:hidden">Back</span>
           </Button>
           
           {isGameCreator && game.status !== 'waiting' && (
@@ -1083,54 +1084,60 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
               <Button 
                 variant="outline" 
                 onClick={pauseGame}
-                className={game.status === 'paused' ? 'bg-yellow-600 text-white' : ''}
+                size="sm"
+                className={`${game.status === 'paused' ? 'bg-yellow-600 text-white' : ''} flex-shrink-0`}
               >
                 {game.status === 'paused' ? (
                   <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Resume
+                    <Play className="w-4 h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Resume</span>
                   </>
                 ) : (
                   <>
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pause
+                    <Pause className="w-4 h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Pause</span>
                   </>
                 )}
         </Button>
               
-              <InvitePlayersModal
-                gameId={game._id}
-                currentPlayers={game.players}
-                maxPlayers={game.settings.maxPlayers}
-                onInviteSent={fetchGame}
-              />
+              <div className="flex-shrink-0">
+                <InvitePlayersModal
+                  gameId={game._id}
+                  currentPlayers={game.players}
+                  maxPlayers={game.settings.maxPlayers}
+                  onInviteSent={fetchGame}
+                />
+              </div>
             </>
           )}
         </div>
 
-        <div className="flex gap-4 text-white">
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            <span>{game.gameName}</span>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-white text-sm sm:text-base w-full sm:w-auto">
+          <div className="flex items-center gap-2 justify-center sm:justify-start">
+            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="truncate">{game.gameName.length > 15 ? game.gameName.substring(0, 15) + '...' : game.gameName}</span>
             {game.status === 'paused' && (
-              <Badge variant="secondary" className="bg-yellow-600">PAUSED</Badge>
+              <Badge variant="secondary" className="bg-yellow-600 text-xs">PAUSED</Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4" />
-            <span>
+          <div className="flex items-center gap-2 justify-center sm:justify-start">
+            <DollarSign className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">
               Blinds: ${game.settings.smallBlind}/${game.settings.bigBlind}
             </span>
+            <span className="sm:hidden">
+              ${game.settings.smallBlind}/${game.settings.bigBlind}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
+          <div className="flex items-center gap-2 justify-center sm:justify-start">
+            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="capitalize">{game.gameState.gamePhase}</span>
           </div>
         </div>
       </div>
 
       {/* Main Game Area */}
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto px-2 sm:px-4">
         {game.status === 'waiting' ? (
           <div className="text-center">
             <div className="text-white mb-4">
@@ -1146,7 +1153,7 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
         ) : (
           <>
             {/* Poker Table with Oval Layout */}
-            <div className="mb-8">
+            <div className="mb-4 sm:mb-8">
               <PokerTableLayout
                 players={game.players}
                 currentPlayer={currentPlayer}
@@ -1190,39 +1197,60 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
             ) : (
               isCurrentPlayerTurn && currentPlayerData && currentPlayerData.cards && currentPlayerData.cards.length > 0 && 
               game.players.filter(p => !p.folded && !p.allIn).length > 1 && (
-              <div className="flex justify-center gap-4 items-center">
-                <Button onClick={fold} variant="destructive">
-                  Fold
-                </Button>
-
-                {canCheck && (
-                  <Button onClick={check} variant="secondary">
-                    Check
+              <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 items-center px-4 sm:px-0">
+                <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
+                  <Button onClick={fold} variant="destructive" size="lg" className="flex-1 sm:flex-none min-h-12">
+                    Fold
                   </Button>
-                )}
 
-                {canCall && (
-                  <Button onClick={call}>
-                    Call ${maxBet - currentPlayerData.currentBet}
-                  </Button>
-                )}
+                  {canCheck && (
+                    <Button onClick={check} variant="secondary" size="lg" className="flex-1 sm:flex-none min-h-12">
+                      Check
+                    </Button>
+                  )}
+
+                  {canCall && (
+                    <Button onClick={call} size="lg" className="flex-1 sm:flex-none min-h-12">
+                      Call ${maxBet - currentPlayerData.currentBet}
+                    </Button>
+                  )}
+                </div>
 
                 {canRaise && (
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-2 items-center w-full sm:w-auto">
                     <Input
                       type="number"
                       value={betAmount}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBetAmount(Number.parseInt(e.target.value) || 0)}
-                      className="w-24"
+                      className="w-20 sm:w-24 min-h-12"
                         min={game.settings.bigBlind}
                       max={currentPlayerData.chips}
                     />
-                    <Button onClick={raise}>Raise</Button>
+                    <Button onClick={raise} size="lg" className="flex-1 sm:flex-none min-h-12">Raise</Button>
                   </div>
                 )}
               </div>
               )
             )}
+
+            {/* Mobile Your Hand - In flow after game controls */}
+            <div className="block sm:hidden">
+              {currentPlayerData && currentPlayerData.cards && currentPlayerData.cards.length > 0 && (
+                <CurrentPlayerCards
+                  cards={currentPlayerData.cards}
+                  playerName={currentPlayerData.username}
+                  chips={currentPlayerData.chips}
+                />
+              )}
+            </div>
+
+            {/* Mobile Chat - Always visible below your hand */}
+            <div className="block sm:hidden mt-6">
+              <GameChat
+                gameId={game._id}
+                currentPlayer={currentPlayer}
+              />
+            </div>
 
             {/* Show waiting message for non-creators when cards haven't been dealt */}
             {!hasCardsBeenDealt && !isGameCreator && game.status === 'active' && (
@@ -1235,17 +1263,21 @@ export default function PokerTable({ gameId, currentPlayer, onBackToDashboard }:
         )}
       </div>
 
-      {/* Game Chat */}
-      <GameChat gameId={game._id} currentPlayer={currentPlayer} />
+      {/* Desktop Chat - Floating widget */}
+      <div className="hidden sm:block">
+        <GameChat gameId={game._id} currentPlayer={currentPlayer} />
+      </div>
 
-      {/* Current Player's Cards - Always Visible when dealt */}
-      {currentPlayerData && currentPlayerData.cards && currentPlayerData.cards.length > 0 && (
-        <CurrentPlayerCards
-          cards={currentPlayerData.cards}
-          playerName={currentPlayerData.username}
-          chips={currentPlayerData.chips}
-        />
-      )}
+      {/* Desktop Current Player's Cards - Floating modal */}
+      <div className="hidden sm:block">
+        {currentPlayerData && currentPlayerData.cards && currentPlayerData.cards.length > 0 && (
+          <CurrentPlayerCards
+            cards={currentPlayerData.cards}
+            playerName={currentPlayerData.username}
+            chips={currentPlayerData.chips}
+          />
+        )}
+      </div>
     </div>
   )
 }

@@ -166,7 +166,7 @@ export default function UserDashboard({ player, onSignOut, onJoinGame, onCreateG
         </Button>
       </div>
 
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Player Stats */}
         <div className="lg:col-span-1">
           <Card>

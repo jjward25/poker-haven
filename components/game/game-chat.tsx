@@ -97,97 +97,176 @@ export default function GameChat({ gameId, currentPlayer }: GameChatProps) {
     })
   }
 
+  // Use CSS to handle mobile vs desktop layout instead of JS detection
+  // This prevents hydration issues and is more reliable
+
   if (isMinimized) {
+    // Desktop: minimized floating button
     return (
-      <div className="fixed bottom-4 right-4 z-10">
+      <div className="fixed bottom-2 sm:bottom-4 right-2 sm:right-4 z-10">
         <Button
           onClick={() => setIsMinimized(false)}
-          className="rounded-full w-12 h-12 bg-blue-600 hover:bg-blue-700"
+          className="rounded-full w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 hover:bg-blue-700"
         >
-          <MessageCircle className="w-6 h-6" />
+          <MessageCircle className="w-4 h-4 sm:w-6 sm:h-6" />
         </Button>
       </div>
     )
   }
 
   return (
-    <div className="fixed bottom-4 right-4 w-80 z-10">
-      <Card className="h-96">
-        <CardHeader className="p-3 pb-2">
-          <CardTitle className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
+    <>
+      {/* Mobile Layout: Static content */}
+      <div className="block sm:hidden w-full">
+        <Card className="h-64">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
               <MessageCircle className="w-4 h-4" />
               Game Chat
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsMinimized(true)}
-            >
-              <Minimize2 className="w-4 h-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 flex flex-col h-80">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto space-y-2 mb-3 pr-2">
-            {messages.length === 0 ? (
-              <div className="text-center text-muted-foreground text-sm py-4">
-                No messages yet. Start the conversation!
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`text-sm ${
-                    msg.playerId === currentPlayer._id
-                      ? "text-right"
-                      : "text-left"
-                  }`}
-                >
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 flex flex-col h-full">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto mb-3 space-y-2 max-h-32">
+              {messages.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center">No messages yet</p>
+              ) : (
+                messages.map((msg) => (
                   <div
-                    className={`inline-block max-w-[80%] px-2 py-1 rounded ${
+                    key={msg.id}
+                    className={`text-sm ${
                       msg.playerId === currentPlayer._id
-                        ? "bg-blue-500 text-white"
-                        : msg.isBot 
-                        ? "bg-gray-200 text-gray-800"
-                        : "bg-gray-100 text-gray-800"
+                        ? "text-right"
+                        : "text-left"
                     }`}
                   >
-                    <div className="font-medium text-xs opacity-75">
-                      {msg.username} {msg.isBot && "(Bot)"}
-                    </div>
-                    <div>{msg.message}</div>
-                    <div className="text-xs opacity-75 mt-1">
-                      {formatTime(msg.timestamp)}
+                    <div
+                      className={`inline-block max-w-[80%] px-2 py-1 rounded ${
+                        msg.playerId === currentPlayer._id
+                          ? "bg-blue-500 text-white"
+                          : msg.isBot 
+                          ? "bg-gray-200 text-gray-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      <div className="font-medium text-xs opacity-75">
+                        {msg.username} {msg.isBot && "(Bot)"}
+                      </div>
+                      <div>{msg.message}</div>
+                      <div className="text-xs opacity-75 mt-1">
+                        {formatTime(msg.timestamp)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
 
-          {/* Message Input */}
-          <form onSubmit={sendMessage} className="flex gap-2">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type a message..."
-              disabled={loading}
-              className="flex-1"
-              maxLength={200}
-            />
-            <Button 
-              type="submit" 
-              size="sm"
-              disabled={loading || !newMessage.trim()}
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+            {/* Message Input */}
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message..."
+                disabled={loading}
+                className="flex-1 min-h-10"
+                maxLength={200}
+              />
+              <Button 
+                type="submit" 
+                disabled={loading || !newMessage.trim()}
+                size="sm"
+                className="min-h-10 px-3"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Desktop Layout: Floating widget */}
+      <div className="hidden sm:block fixed bottom-2 sm:bottom-4 right-2 sm:right-4 w-72 sm:w-80 z-10">
+        <Card className="h-80 sm:h-96">
+          <CardHeader className="p-2 sm:p-3 pb-1 sm:pb-2">
+            <CardTitle className="flex items-center justify-between text-xs sm:text-sm">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Game Chat</span>
+                <span className="sm:hidden">Chat</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMinimized(true)}
+                className="h-6 w-6 p-0"
+              >
+                <Minimize2 className="w-3 h-3 sm:w-4 sm:h-4" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 flex flex-col h-80">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto space-y-2 mb-3 pr-2">
+              {messages.length === 0 ? (
+                <div className="text-center text-muted-foreground text-sm py-4">
+                  No messages yet. Start the conversation!
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`text-sm ${
+                      msg.playerId === currentPlayer._id
+                        ? "text-right"
+                        : "text-left"
+                    }`}
+                  >
+                    <div
+                      className={`inline-block max-w-[80%] px-2 py-1 rounded ${
+                        msg.playerId === currentPlayer._id
+                          ? "bg-blue-500 text-white"
+                          : msg.isBot 
+                          ? "bg-gray-200 text-gray-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      <div className="font-medium text-xs opacity-75">
+                        {msg.username} {msg.isBot && "(Bot)"}
+                      </div>
+                      <div>{msg.message}</div>
+                      <div className="text-xs opacity-75 mt-1">
+                        {formatTime(msg.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message..."
+                disabled={loading}
+                className="flex-1"
+                maxLength={200}
+              />
+              <Button 
+                type="submit" 
+                size="sm"
+                disabled={loading || !newMessage.trim()}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </>
   )
 } 

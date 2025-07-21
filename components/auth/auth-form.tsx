@@ -168,8 +168,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
             <Button
               type="submit"
-              className="w-full"
+              className="w-full min-h-12"
               disabled={loading}
+              size="lg"
             >
               {loading ? "Please wait..." : isSignUp ? "Sign Up" : "Sign In"}
             </Button>
@@ -184,6 +185,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                 setConfirmPassword("")
               }}
               disabled={loading}
+              className="min-h-10"
             >
               {isSignUp
                 ? "Already have an account? Sign In"
